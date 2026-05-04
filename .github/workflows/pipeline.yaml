@@ -34,6 +34,8 @@ jobs:
         import kfp
         import time
         
+        # 1. Setup Client
+        # UPDATE THIS URL IF YOU RESTARTED NGROK
         host_url = 'https://filling-risk-lingo.ngrok-free.dev'
         client = kfp.Client(host=host_url)
         
@@ -42,40 +44,38 @@ jobs:
         run_name = f'automated-run-{int(time.time())}'
         experiment_name = 'Iris-Experiments'
 
-        # 1. Get or Create Experiment
+        # 2. Get or Create Experiment
         try:
-            exp = client.create_experiment(name=experiment_name)
-            experiment_id = exp.experiment_id
-        except Exception:
             exp = client.get_experiment(experiment_name=experiment_name)
             experiment_id = exp.experiment_id
+            print(f'Using existing Experiment ID: {experiment_id}')
+        except Exception:
+            exp = client.create_experiment(name=experiment_name)
+            experiment_id = exp.experiment_id
+            print(f'Created new Experiment ID: {experiment_id}')
 
-        # 2. Upload Pipeline and Get VERSION ID
-        # In KFP v2, the version ID is the key to auto-starting
+        # 3. Upload/Fetch Pipeline
         try:
             pipeline = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
             pipeline_id = pipeline.pipeline_id
-            version_id = pipeline.default_version.pipeline_version_id
+            print(f'Uploaded new pipeline version: {pipeline_id}')
         except Exception:
-            # If exists, find the latest version
             pipelines = client.list_pipelines()
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
-            versions = client.list_pipeline_versions(pipeline_id=pipeline_id)
-            version_id = versions.pipeline_versions[0].pipeline_version_id
+            print(f'Using existing pipeline ID: {pipeline_id}')
 
-        # 3. Trigger the Run with BOTH IDs
+        # 4. Trigger the Run using run_pipeline (Most compatible v2 method)
         try:
-            run_result = client.create_run(
+            run_result = client.run_pipeline(
                 experiment_id=experiment_id,
                 job_name=run_name,
-                pipeline_id=pipeline_id,
-                pipeline_version_id=version_id  # This is the "magic" line for auto-start
+                pipeline_id=pipeline_id
             )
-            print(f'Run triggered successfully!')
-            print(f'View Run: {host_url}/#/runs/details/{run_result.run_id}')
+            print(f'Run successfully triggered!')
+            print(f'Run details available in Kubeflow UI.')
         except Exception as e:
             print(f'Failed to trigger run: {e}')
         "
