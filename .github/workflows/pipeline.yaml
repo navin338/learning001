@@ -1,0 +1,49 @@
+name: Compile and Upload Kubeflow Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install kfp  # Ensures the SDK is available for the upload
+
+    - name: Compile Pipeline YAML
+      run: |
+        # Generates the mlflow_kubeflow_pipeline.yaml
+        python throughkubeflow_mlflowloggging_withoutcache_v1.py
+
+    - name: Upload to Local Kubeflow
+      run: |
+        python -c "
+        import kfp
+        # Hardcoded ngrok URL
+        host_url = 'https://filling-risk-lingo.ngrok-free.dev'
+        client = kfp.Client(host=host_url)
+        
+        try:
+            client.upload_pipeline(
+                pipeline_package_path='mlflow_kubeflow_pipeline.yaml',
+                pipeline_name='iris-classifier-automated'
+            )
+            print('Successfully uploaded to Kubeflow!')
+        except Exception as e:
+            print(f'Upload failed: {e}')
+            # If it fails, check if the pipeline name already exists 
+            # or if ngrok has timed out.
+        "
