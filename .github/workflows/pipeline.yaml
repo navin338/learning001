@@ -39,32 +39,39 @@ jobs:
         
         pipeline_name = 'iris-classifier-automated'
         file_path = 'mlflow_kubeflow_pipeline.yaml'
-        run_name = f'run-{int(time.time())}'
+        run_name = f'automated-run-{int(time.time())}'
+        experiment_name = 'Iris-Experiments'
 
+        # 1. Get or Create Experiment
         try:
-            # 1. Upload the pipeline
+            exp = client.create_experiment(name=experiment_name)
+            experiment_id = exp.experiment_id
+            print(f'Using Experiment ID: {experiment_id}')
+        except Exception:
+            # If exists, fetch it
+            exp = client.get_experiment(experiment_name=experiment_name)
+            experiment_id = exp.experiment_id
+            print(f'Fetched existing Experiment ID: {experiment_id}')
+
+        # 2. Upload/Fetch Pipeline
+        try:
             pipeline = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
-            # In KFP v2, use pipeline_id instead of id
             pipeline_id = pipeline.pipeline_id
-            print(f'Pipeline uploaded. ID: {pipeline_id}')
-        except Exception as e:
-            print(f'Upload check: {e}')
-            print('Fetching existing pipeline ID...')
+        except Exception:
             pipelines = client.list_pipelines()
-            # In KFP v2, the object is 'pipeline_id' and 'display_name'
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
 
-        # 2. Trigger the Run
+        # 3. Trigger the Run with explicit Experiment ID
         try:
             run_result = client.create_run_from_pipeline_id(
                 pipeline_id=pipeline_id,
                 run_name=run_name,
-                experiment_name='Default'
+                experiment_id=experiment_id  # Using ID instead of Name for v2 stability
             )
-            print(f'Run created successfully! Name: {run_name}')
+            print(f'Run triggered! View it here: {host_url}/#/runs/details/{run_result.run_id}')
         except Exception as e:
-            print(f'Failed to create run: {e}')
+            print(f'Failed to trigger run: {e}')
         "
