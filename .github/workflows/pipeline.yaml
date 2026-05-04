@@ -39,21 +39,23 @@ jobs:
         
         pipeline_name = 'iris-classifier-automated'
         file_path = 'mlflow_kubeflow_pipeline.yaml'
-        run_name = f'run-{int(time.time())}' # Unique name using timestamp
+        run_name = f'run-{int(time.time())}'
 
         try:
-            # 1. Upload the pipeline and get the version/id
+            # 1. Upload the pipeline
             pipeline = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
-            pipeline_id = pipeline.id
+            # In KFP v2, use pipeline_id instead of id
+            pipeline_id = pipeline.pipeline_id
             print(f'Pipeline uploaded. ID: {pipeline_id}')
         except Exception as e:
-            # If it already exists, we find the existing ID
-            print('Pipeline exists, fetching existing ID...')
+            print(f'Upload check: {e}')
+            print('Fetching existing pipeline ID...')
             pipelines = client.list_pipelines()
-            pipeline_id = next(p.id for p in pipelines.pipelines if p.display_name == pipeline_name)
+            # In KFP v2, the object is 'pipeline_id' and 'display_name'
+            pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
 
         # 2. Trigger the Run
         try:
