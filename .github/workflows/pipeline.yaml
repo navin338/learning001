@@ -50,27 +50,32 @@ jobs:
             exp = client.get_experiment(experiment_name=experiment_name)
             experiment_id = exp.experiment_id
 
-        # 2. Upload/Fetch Pipeline
+        # 2. Upload Pipeline and Get VERSION ID
+        # In KFP v2, the version ID is the key to auto-starting
         try:
             pipeline = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
             pipeline_id = pipeline.pipeline_id
+            version_id = pipeline.default_version.pipeline_version_id
         except Exception:
+            # If exists, find the latest version
             pipelines = client.list_pipelines()
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
+            versions = client.list_pipeline_versions(pipeline_id=pipeline_id)
+            version_id = versions.pipeline_versions[0].pipeline_version_id
 
-        # 3. Trigger the Run using KFP v2 'create_run'
+        # 3. Trigger the Run with BOTH IDs
         try:
-            # In KFP v2, we use create_run and point to the pipeline_id
             run_result = client.create_run(
                 experiment_id=experiment_id,
                 job_name=run_name,
-                pipeline_id=pipeline_id
+                pipeline_id=pipeline_id,
+                pipeline_version_id=version_id  # This is the "magic" line for auto-start
             )
             print(f'Run triggered successfully!')
-            print(f'Run ID: {run_result.run_id}')
+            print(f'View Run: {host_url}/#/runs/details/{run_result.run_id}')
         except Exception as e:
             print(f'Failed to trigger run: {e}')
         "
