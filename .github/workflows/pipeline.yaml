@@ -28,22 +28,41 @@ jobs:
         # Generates the mlflow_kubeflow_pipeline.yaml
         python throughkubeflow_mlflowloggging_withoutcache_v1.py
 
-    - name: Upload to Local Kubeflow
+    - name: Upload and Execute Pipeline
       run: |
         python -c "
         import kfp
-        # Hardcoded ngrok URL
+        import time
+        
         host_url = 'https://filling-risk-lingo.ngrok-free.dev'
         client = kfp.Client(host=host_url)
         
+        pipeline_name = 'iris-classifier-automated'
+        file_path = 'mlflow_kubeflow_pipeline.yaml'
+        run_name = f'run-{int(time.time())}' # Unique name using timestamp
+
         try:
-            client.upload_pipeline(
-                pipeline_package_path='mlflow_kubeflow_pipeline.yaml',
-                pipeline_name='iris-classifier-automated'
+            # 1. Upload the pipeline and get the version/id
+            pipeline = client.upload_pipeline(
+                pipeline_package_path=file_path,
+                pipeline_name=pipeline_name
             )
-            print('Successfully uploaded to Kubeflow!')
+            pipeline_id = pipeline.id
+            print(f'Pipeline uploaded. ID: {pipeline_id}')
         except Exception as e:
-            print(f'Upload failed: {e}')
-            # If it fails, check if the pipeline name already exists 
-            # or if ngrok has timed out.
+            # If it already exists, we find the existing ID
+            print('Pipeline exists, fetching existing ID...')
+            pipelines = client.list_pipelines()
+            pipeline_id = next(p.id for p in pipelines.pipelines if p.display_name == pipeline_name)
+
+        # 2. Trigger the Run
+        try:
+            run_result = client.create_run_from_pipeline_id(
+                pipeline_id=pipeline_id,
+                run_name=run_name,
+                experiment_name='Default'
+            )
+            print(f'Run created successfully! Name: {run_name}')
+        except Exception as e:
+            print(f'Failed to create run: {e}')
         "
