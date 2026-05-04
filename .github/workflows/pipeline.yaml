@@ -46,12 +46,9 @@ jobs:
         try:
             exp = client.create_experiment(name=experiment_name)
             experiment_id = exp.experiment_id
-            print(f'Using Experiment ID: {experiment_id}')
         except Exception:
-            # If exists, fetch it
             exp = client.get_experiment(experiment_name=experiment_name)
             experiment_id = exp.experiment_id
-            print(f'Fetched existing Experiment ID: {experiment_id}')
 
         # 2. Upload/Fetch Pipeline
         try:
@@ -64,14 +61,16 @@ jobs:
             pipelines = client.list_pipelines()
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
 
-        # 3. Trigger the Run with explicit Experiment ID
+        # 3. Trigger the Run using KFP v2 'create_run'
         try:
-            run_result = client.create_run_from_pipeline_id(
-                pipeline_id=pipeline_id,
-                run_name=run_name,
-                experiment_id=experiment_id  # Using ID instead of Name for v2 stability
+            # In KFP v2, we use create_run and point to the pipeline_id
+            run_result = client.create_run(
+                experiment_id=experiment_id,
+                job_name=run_name,
+                pipeline_id=pipeline_id
             )
-            print(f'Run triggered! View it here: {host_url}/#/runs/details/{run_result.run_id}')
+            print(f'Run triggered successfully!')
+            print(f'Run ID: {run_result.run_id}')
         except Exception as e:
             print(f'Failed to trigger run: {e}')
         "
