@@ -34,8 +34,6 @@ jobs:
         import kfp
         import time
         
-        # 1. Setup Client
-        # UPDATE THIS URL IF YOU RESTARTED NGROK
         host_url = 'https://filling-risk-lingo.ngrok-free.dev'
         client = kfp.Client(host=host_url)
         
@@ -44,38 +42,41 @@ jobs:
         run_name = f'automated-run-{int(time.time())}'
         experiment_name = 'Iris-Experiments'
 
-        # 2. Get or Create Experiment
+        # 1. Get or Create Experiment
         try:
             exp = client.get_experiment(experiment_name=experiment_name)
             experiment_id = exp.experiment_id
-            print(f'Using existing Experiment ID: {experiment_id}')
         except Exception:
             exp = client.create_experiment(name=experiment_name)
             experiment_id = exp.experiment_id
-            print(f'Created new Experiment ID: {experiment_id}')
 
-        # 3. Upload/Fetch Pipeline
+        # 2. Upload/Fetch Pipeline and Version
         try:
-            pipeline = client.upload_pipeline(
+            # Uploading returns the version object in v2
+            pipeline_version = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
-            pipeline_id = pipeline.pipeline_id
-            print(f'Uploaded new pipeline version: {pipeline_id}')
+            pipeline_id = pipeline_version.pipeline_id
+            version_id = pipeline_version.pipeline_version_id
+            print(f'Uploaded Version ID: {version_id}')
         except Exception:
+            # If upload fails because version exists, fetch latest
             pipelines = client.list_pipelines()
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
-            print(f'Using existing pipeline ID: {pipeline_id}')
+            versions = client.list_pipeline_versions(pipeline_id=pipeline_id)
+            version_id = versions.pipeline_versions[0].pipeline_version_id
+            print(f'Using Existing Version ID: {version_id}')
 
-        # 4. Trigger the Run using run_pipeline (Most compatible v2 method)
+        # 3. Trigger the Run (Providing both IDs as required)
         try:
             run_result = client.run_pipeline(
                 experiment_id=experiment_id,
                 job_name=run_name,
-                pipeline_id=pipeline_id
+                pipeline_id=pipeline_id,
+                version_id=version_id  # This satisfies the KFP v2 error
             )
             print(f'Run successfully triggered!')
-            print(f'Run details available in Kubeflow UI.')
         except Exception as e:
             print(f'Failed to trigger run: {e}')
         "
