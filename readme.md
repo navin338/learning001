@@ -13,6 +13,11 @@ example execute this line
 
 http://localhost:30009/docs#/default/predict_predict_post
 
+4 As well for usin the local host run this cmd to this specific path 
+
+D:\selfhosted_runner\actions-runner> ./run.cmd
+
+
 
 
 
