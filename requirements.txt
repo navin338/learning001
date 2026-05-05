@@ -1,0 +1,12 @@
+pandas
+scikit-learn
+joblib
+matplotlib
+kfp
+mlflow
+fastapi
+uvicorn
+pandas
+scikit-learn
+cloudpickle
+numpy
