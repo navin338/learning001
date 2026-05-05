@@ -1,13 +1,13 @@
-name: Compile, Upload Kubeflow Pipeline and Deploy API
+name: Compile and Upload Kubeflow Pipeline
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  # JOB 1: Handles the Kubeflow Pipeline logic on GitHub's runners
-  build-and-train:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -21,10 +21,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install kfp
+        pip install kfp  # Ensures the SDK is available for the upload
 
     - name: Compile Pipeline YAML
       run: |
+        # Generates the mlflow_kubeflow_pipeline.yaml
         python throughkubeflow_mlflowloggging_withoutcache_v1.py
 
     - name: Upload and Execute Pipeline
@@ -41,6 +42,7 @@ jobs:
         run_name = f'automated-run-{int(time.time())}'
         experiment_name = 'Iris-Experiments'
 
+        # 1. Get or Create Experiment
         try:
             exp = client.get_experiment(experiment_name=experiment_name)
             experiment_id = exp.experiment_id
@@ -48,53 +50,33 @@ jobs:
             exp = client.create_experiment(name=experiment_name)
             experiment_id = exp.experiment_id
 
+        # 2. Upload/Fetch Pipeline and Version
         try:
+            # Uploading returns the version object in v2
             pipeline_version = client.upload_pipeline(
                 pipeline_package_path=file_path,
                 pipeline_name=pipeline_name
             )
             pipeline_id = pipeline_version.pipeline_id
             version_id = pipeline_version.pipeline_version_id
+            print(f'Uploaded Version ID: {version_id}')
         except Exception:
+            # If upload fails because version exists, fetch latest
             pipelines = client.list_pipelines()
             pipeline_id = next(p.pipeline_id for p in pipelines.pipelines if p.display_name == pipeline_name)
             versions = client.list_pipeline_versions(pipeline_id=pipeline_id)
             version_id = versions.pipeline_versions[0].pipeline_version_id
+            print(f'Using Existing Version ID: {version_id}')
 
+        # 3. Trigger the Run (Providing both IDs as required)
         try:
             run_result = client.run_pipeline(
                 experiment_id=experiment_id,
                 job_name=run_name,
                 pipeline_id=pipeline_id,
-                version_id=version_id
+                version_id=version_id  # This satisfies the KFP v2 error
             )
             print(f'Run successfully triggered!')
         except Exception as e:
             print(f'Failed to trigger run: {e}')
         "
-
-  # JOB 2: Handles the Docker build and Kind deployment on your LOCAL machine
-  deploy-local-api:
-    needs: build-and-train
-    runs-on: [self-hosted, Windows, X64] # Matches your runner config
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Build Docker Image
-      run: |
-        docker build -t iris-api:latest .
-
-    - name: Load Image into Kind
-      run: |
-        kind load docker-image iris-api:latest --name my-cluster
-
-    - name: Apply Kubernetes Manifests
-      run: |
-        # Ensure these files exist in your repository
-        kubectl apply -f deployment.yaml
-        kubectl apply -f service.yaml
-
-    - name: Refresh API Deployment
-      run: |
-        kubectl rollout restart deployment/iris-api
